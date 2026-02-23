@@ -657,8 +657,27 @@ def report():
 app.teardown_appcontext(db_close)
 
 # ---------------------- 启动入口 ----------------------
+def force_reset_admin_pwd():
+    """启动时强制重置admin密码为admin123"""
+    conn = sqlite3.connect('member_system.db')
+    cursor = conn.cursor()
+    # 先确保admin账号存在，不存在就创建；存在就重置密码
+    cursor.execute('SELECT * FROM admins WHERE username=?', ('admin',))
+    if cursor.fetchone():
+        cursor.execute('UPDATE admins SET password=? WHERE username=?', ('admin123', 'admin'))
+    else:
+        cursor.execute('INSERT INTO admins (username, password, role) VALUES (?, ?, ?)', ('admin', 'admin123', 'admin'))
+    conn.commit()
+    conn.close()
+    print("✅ 强制重置密码完成：admin / admin123")
+
 if __name__ == '__main__':
     # 初始化数据库
     init_db()
-    # 启动服务（调试模式开启，便于排查错误）
+    # 启动时强制重置密码
+    force_reset_admin_pwd()
+    # 启动服务
     app.run(debug=True, host='0.0.0.0', port=5000)
+
+# 给Render的gunicorn用的启动钩子（关键！）
+force_reset_admin_pwd()
