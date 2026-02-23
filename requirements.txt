@@ -1,0 +1,5 @@
+Flask==2.3.3
+gunicorn==21.2.0
+# 下面加你用到的其他库，比如：
+# requests==2.31.0
+# pymysql==1.1.0
