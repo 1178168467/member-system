@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>会员管理系统 - 登录</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+        }
+        body {
+            background-color: #ecf0f1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .login-box {
+            background-color: white;
+            width: 400px;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .login-box h2 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            color: #34495e;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 5px rgba(52, 152, 219, 0.3);
+        }
+        .btn-login {
+            width: 100%;
+            padding: 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .btn-login:hover {
+            background-color: #2980b9;
+        }
+        .msg {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            display: none;
+        }
+        .msg-success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            display: block;
+        }
+        .msg-error {
+            background-color: #f2dede;
+            color: #a94442;
+            display: block;
+        }
+    </style>
+    <!-- 引入jQuery，用于AJAX请求 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+</head>
+<body>
+    <div class="login-box">
+        <h2>会员管理系统登录</h2>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">用户名</label>
+                <input type="text" id="username" name="username" placeholder="请输入用户名" required>
+            </div>
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input type="password" id="password" name="password" placeholder="请输入密码" required>
+            </div>
+            <button type="submit" class="btn-login">登录</button>
+            <div id="msg" class="msg"></div>
+        </form>
+    </div>
+
+    <script>
+        // 登录表单提交处理
+        $('#loginForm').submit(function(e) {
+            // 阻止表单默认提交（避免页面刷新）
+            e.preventDefault();
+            
+            // 获取输入值并去除首尾空格
+            const username = $('#username').val().trim();
+            const password = $('#password').val().trim();
+            
+            // 清空之前的提示
+            $('#msg').removeClass('msg-success msg-error').text('');
+            
+            // 空值验证（前端兜底）
+            if (!username) {
+                $('#msg').addClass('msg-error').text('请输入用户名');
+                return;
+            }
+            if (!password) {
+                $('#msg').addClass('msg-error').text('请输入密码');
+                return;
+            }
+            
+            // 发送AJAX POST请求到后端登录接口
+            $.post('/login', {
+                username: username,
+                password: password
+            }, function(res) {
+                // 接收后端返回的JSON结果
+                if (res.success) {
+                    // 登录成功：显示提示，1秒后跳转到工作台
+                    $('#msg').addClass('msg-success').text(res.msg);
+                    setTimeout(function() {
+                        window.location.href = res.redirect; // 跳转到index.html
+                    }, 1000);
+                } else {
+                    // 登录失败：显示错误提示
+                    $('#msg').addClass('msg-error').text(res.msg);
+                }
+            }).fail(function(xhr) {
+                // 请求失败（如网络错误、后端500）
+                $('#msg').addClass('msg-error').text('登录请求失败：' + xhr.statusText);
+            });
+        });
+    </script>
+</body>
+</html>

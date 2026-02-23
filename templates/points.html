@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>会员管理系统 - 积分管理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .nav {
+            background-color: #34495e;
+            padding: 0 20px;
+        }
+        .nav ul {
+            list-style: none;
+            display: flex;
+        }
+        .nav ul li a {
+            display: block;
+            color: white;
+            text-decoration: none;
+            padding: 15px 20px;
+            transition: background-color 0.3s;
+        }
+        .nav ul li a:hover, .nav ul li a.active {
+            background-color: #1abc9c;
+        }
+        .content {
+            padding: 25px 20px;
+            background-color: #ecf0f1;
+            min-height: calc(100vh - 120px);
+        }
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        .card h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            color: #34495e;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        .btn-primary { background-color: #3498db; }
+        .btn-primary:hover { background-color: #2980b9; }
+        .btn-success { background-color: #27ae60; }
+        .btn-success:hover { background-color: #219653; }
+        .member-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .member-info p {
+            margin-bottom: 8px;
+            color: #2c3e50;
+        }
+        .member-info span {
+            font-weight: 600;
+            color: #e74c3c;
+        }
+        .msg {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .msg-success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            display: block;
+        }
+        .msg-error {
+            background-color: #f2dede;
+            color: #a94442;
+            display: block;
+        }
+    </style>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+</head>
+<body>
+    <!-- 头部 -->
+    <div class="header">
+        <div class="title">会员管理系统</div>
+        <div class="user-info">
+            <span>当前登录：{{ session.username }}</span>
+            <a href="/logout" style="color: white; margin-left: 15px; text-decoration: none;">退出登录</a>
+        </div>
+    </div>
+
+    <!-- 导航 -->
+    <div class="nav">
+        <ul>
+            <li><a href="/">工作台</a></li>
+            <li><a href="/member">会员管理</a></li>
+            <li><a href="/consume">消费收银</a></li>
+            <li><a href="/recharge">充值管理</a></li>
+            <li><a href="/points" class="active">积分管理</a></li>
+            <li><a href="/report">统计报表</a></li>
+            <li><a href="/setting">系统设置</a></li>
+        </ul>
+    </div>
+
+    <!-- 内容 -->
+    <div class="content">
+        <div class="card">
+            <h3>积分调整</h3>
+            
+            <!-- 会员查询 -->
+            <div class="form-group">
+                <label>查询会员（手机号/卡号）</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="keyword" placeholder="请输入手机号或卡号">
+                    <button class="btn btn-primary" id="searchBtn">查询</button>
+                </div>
+            </div>
+
+            <!-- 会员信息 -->
+            <div class="member-info" id="memberInfo">
+                <p>卡号：<span id="cardNo"></span></p>
+                <p>姓名：<span id="memberName"></span></p>
+                <p>手机号：<span id="phone"></span></p>
+                <p>当前积分：<span id="points"></span> 分</p>
+            </div>
+
+            <!-- 积分调整 -->
+            <div class="form-group">
+                <label>积分变动（正数增加，负数减少）</label>
+                <input type="number" id="pointsChange" placeholder="请输入积分变动值">
+            </div>
+            <div class="form-group">
+                <label>变动类型</label>
+                <select id="changeType">
+                    <option value="手动增加">手动增加</option>
+                    <option value="手动扣除">手动扣除</option>
+                    <option value="积分兑换">积分兑换</option>
+                    <option value="补偿赠送">补偿赠送</option>
+                    <option value="其他">其他</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>备注</label>
+                <textarea id="remark" rows="3" placeholder="请输入积分变动备注（必填）"></textarea>
+            </div>
+
+            <input type="hidden" id="memberId">
+            <button class="btn btn-success" id="submitBtn" disabled>提交调整</button>
+            <div id="msg" class="msg"></div>
+        </div>
+    </div>
+
+    <script>
+        // 查询会员
+        $('#searchBtn').click(function() {
+            const keyword = $('#keyword').val().trim();
+            if (!keyword) {
+                $('#msg').addClass('msg-error').text('请输入手机号或卡号');
+                return;
+            }
+
+            $.post('/consume/search', {keyword: keyword}, function(res) {
+                if (res.success) {
+                    const member = res.member;
+                    // 填充会员信息
+                    $('#memberId').val(member.id);
+                    $('#cardNo').text(member.card_no);
+                    $('#memberName').text(member.name);
+                    $('#phone').text(member.phone);
+                    $('#points').text(member.points);
+                    
+                    // 显示会员信息和启用提交按钮
+                    $('#memberInfo').css('display', 'block');
+                    $('#submitBtn').prop('disabled', false);
+                    $('#msg').removeClass('msg-error msg-success').text('');
+                } else {
+                    $('#memberInfo').css('display', 'none');
+                    $('#submitBtn').prop('disabled', true);
+                    $('#msg').addClass('msg-error').text(res.msg);
+                }
+            });
+        });
+
+        // 提交积分调整
+        $('#submitBtn').click(function() {
+            const memberId = $('#memberId').val();
+            const pointsChange = $('#pointsChange').val().trim();
+            const changeType = $('#changeType').val();
+            const remark = $('#remark').val().trim();
+
+            if (!pointsChange) {
+                $('#msg').addClass('msg-error').text('请输入积分变动值');
+                return;
+            }
+            if (!remark) {
+                $('#msg').addClass('msg-error').text('请输入变动备注');
+                return;
+            }
+
+            const changeText = pointsChange > 0 ? `增加${pointsChange}积分` : `扣除${Math.abs(pointsChange)}积分`;
+            if (confirm(`确认对${$('#memberName').text()}${changeText}？`)) {
+                $.post('/points/adjust', {
+                    member_id: memberId,
+                    points_change: pointsChange,
+                    change_type: changeType,
+                    remark: remark
+                }, function(res) {
+                    if (res.success) {
+                        $('#msg').addClass('msg-success').text(res.msg);
+                        // 重置表单
+                        $('#pointsChange').val('');
+                        $('#remark').val('');
+                        $('#submitBtn').prop('disabled', true);
+                        // 更新显示的积分
+                        $('#points').text(res.msg.match(/当前积分：(\d+)/)[1]);
+                    } else {
+                        $('#msg').addClass('msg-error').text(res.msg);
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

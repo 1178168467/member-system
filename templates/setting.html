@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>会员管理系统 - 系统设置</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .nav {
+            background-color: #34495e;
+            padding: 0 20px;
+        }
+        .nav ul {
+            list-style: none;
+            display: flex;
+        }
+        .nav ul li a {
+            display: block;
+            color: white;
+            text-decoration: none;
+            padding: 15px 20px;
+            transition: background-color 0.3s;
+        }
+        .nav ul li a:hover, .nav ul li a.active {
+            background-color: #1abc9c;
+        }
+        .content {
+            padding: 25px 20px;
+            background-color: #ecf0f1;
+            min-height: calc(100vh - 120px);
+        }
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        .card h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .form-group {
+            margin-bottom: 15px;
+            display: inline-block;
+            width: 30%;
+            margin-right: 2%;
+        }
+        .form-group label {
+            display: block;
+            color: #34495e;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        .btn-primary { background-color: #3498db; }
+        .btn-primary:hover { background-color: #2980b9; }
+        .btn-danger { background-color: #e74c3c; }
+        .btn-danger:hover { background-color: #c0392b; }
+        .msg {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .msg-success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            display: block;
+        }
+        .msg-error {
+            background-color: #f2dede;
+            color: #a94442;
+            display: block;
+        }
+    </style>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+</head>
+<body>
+    <div class="header">
+        <div class="title">会员管理系统</div>
+        <div class="user-info">
+            <span>当前登录：{{ session.username }}</span>
+            <a href="/logout" style="color: white; margin-left: 15px; text-decoration: none;">退出登录</a>
+        </div>
+    </div>
+
+    <div class="nav">
+        <ul>
+            <li><a href="/">工作台</a></li>
+            <li><a href="/member">会员管理</a></li>
+            <li><a href="/consume">消费收银</a></li>
+            <li><a href="/recharge">充值管理</a></li>
+            <li><a href="/points">积分管理</a></li>
+            <li><a href="/report">统计报表</a></li>
+            <li><a href="/setting" class="active">系统设置</a></li>
+        </ul>
+    </div>
+
+    <div class="content">
+        <!-- 系统基础设置 -->
+        <div class="card">
+            <h3>系统基础设置</h3>
+            <form id="settingForm">
+                <div class="form-group">
+                    <label>店铺名称</label>
+                    <input type="text" id="shop_name" name="shop_name" value="{{ setting.shop_name if setting else '' }}" placeholder="请输入店铺名称">
+                </div>
+                <div class="form-group">
+                    <label>店铺电话</label>
+                    <input type="text" id="shop_phone" name="shop_phone" value="{{ setting.shop_phone if setting else '' }}" placeholder="请输入店铺电话">
+                </div>
+                <div class="form-group">
+                    <label>店铺地址</label>
+                    <input type="text" id="shop_address" name="shop_address" value="{{ setting.shop_address if setting else '' }}" placeholder="请输入店铺地址">
+                </div>
+                <div class="form-group">
+                    <label>积分比例（元/积分）</label>
+                    <input type="number" id="point_rate" name="point_rate" value="{{ setting.point_rate if setting else 1 }}" min="1" placeholder="多少元积1分">
+                </div>
+                <div class="form-group">
+                    <label>银卡升级积分</label>
+                    <input type="number" id="level_up_points" name="level_up_points" value="{{ setting.level_up_points if setting else 100 }}" min="0" placeholder="银卡会员所需积分">
+                </div>
+                <div class="form-group">
+                    <label>金卡升级积分</label>
+                    <input type="number" id="level_up_gold_points" name="level_up_gold_points" value="{{ setting.level_up_gold_points if setting else 1000 }}" min="0" placeholder="金卡会员所需积分">
+                </div>
+                <button type="submit" class="btn btn-primary">保存设置</button>
+                <div id="settingMsg" class="msg"></div>
+            </form>
+        </div>
+
+        <!-- 添加操作员 -->
+        <div class="card">
+            <h3>添加操作员</h3>
+            <form id="addAdminForm">
+                <div class="form-group">
+                    <label>操作员账号</label>
+                    <input type="text" id="admin_username" name="username" placeholder="请输入账号">
+                </div>
+                <div class="form-group">
+                    <label>操作员密码</label>
+                    <input type="password" id="admin_password" name="password" placeholder="请输入密码">
+                </div>
+                <div class="form-group">
+                    <label>角色</label>
+                    <select id="admin_role" name="role" style="width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="operator">普通操作员</option>
+                        <option value="admin">管理员</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">添加操作员</button>
+                <div id="adminMsg" class="msg"></div>
+            </form>
+        </div>
+
+        <!-- 密码重置 -->
+        <div class="card">
+            <h3>密码重置</h3>
+            <form id="resetPwdForm">
+                <div class="form-group">
+                    <label>目标账号</label>
+                    <input type="text" id="target_username" name="target_username" value="{{ session.username }}" placeholder="请输入要重置的账号">
+                </div>
+                <div class="form-group">
+                    <label>新密码</label>
+                    <input type="password" id="new_password" name="new_password" placeholder="请输入新密码">
+                </div>
+                <button type="submit" class="btn btn-danger">重置密码</button>
+                <div id="pwdMsg" class="msg"></div>
+            </form>
+        </div>
+
+        <!-- 数据备份 -->
+        <div class="card">
+            <h3>数据备份</h3>
+            <button id="backupBtn" class="btn btn-primary">立即备份</button>
+            <div id="backupMsg" class="msg"></div>
+        </div>
+    </div>
+
+    <script>
+        // 保存系统设置
+        $('#settingForm').submit(function(e) {
+            e.preventDefault();
+            const formData = $(this).serialize();
+            $('#settingMsg').removeClass('msg-success msg-error').text('');
+            
+            $.post('/setting/save', formData, function(res) {
+                if (res.success) {
+                    $('#settingMsg').addClass('msg-success').text(res.msg);
+                } else {
+                    $('#settingMsg').addClass('msg-error').text(res.msg);
+                }
+            }).fail(function(xhr) {
+                $('#settingMsg').addClass('msg-error').text('保存失败：' + xhr.statusText);
+            });
+        });
+
+        // 添加操作员
+        $('#addAdminForm').submit(function(e) {
+            e.preventDefault();
+            const formData = $(this).serialize();
+            $('#adminMsg').removeClass('msg-success msg-error').text('');
+            
+            $.post('/setting/add_admin', formData, function(res) {
+                if (res.success) {
+                    $('#adminMsg').addClass('msg-success').text(res.msg);
+                    $('#addAdminForm')[0].reset();
+                } else {
+                    $('#adminMsg').addClass('msg-error').text(res.msg);
+                }
+            }).fail(function(xhr) {
+                $('#adminMsg').addClass('msg-error').text('添加失败：' + xhr.statusText);
+            });
+        });
+
+        // 重置密码
+        $('#resetPwdForm').submit(function(e) {
+            e.preventDefault();
+            const formData = $(this).serialize();
+            $('#pwdMsg').removeClass('msg-success msg-error').text('');
+            
+            $.post('/setting/reset_pwd', formData, function(res) {
+                if (res.success) {
+                    $('#pwdMsg').addClass('msg-success').text(res.msg);
+                    $('#resetPwdForm')[0].reset();
+                    // 如果是重置自己的密码，提示并跳转到登录页
+                    if (res.need_relogin) {
+                        setTimeout(function() {
+                            window.location.href = '/login';
+                        }, 1500);
+                    }
+                } else {
+                    $('#pwdMsg').addClass('msg-error').text(res.msg);
+                }
+            }).fail(function(xhr) {
+                $('#pwdMsg').addClass('msg-error').text('重置失败：' + xhr.statusText);
+            });
+        });
+
+        // 数据备份
+        $('#backupBtn').click(function() {
+            $('#backupMsg').removeClass('msg-success msg-error').text('');
+            
+            $.get('/setting/backup', function(res) {
+                if (res.success) {
+                    $('#backupMsg').addClass('msg-success').text(res.msg + ' 文件名：' + res.filename);
+                } else {
+                    $('#backupMsg').addClass('msg-error').text(res.msg);
+                }
+            }).fail(function(xhr) {
+                $('#backupMsg').addClass('msg-error').text('备份失败：' + xhr.statusText);
+            });
+        });
+    </script>
+</body>
+</html>
