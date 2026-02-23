@@ -140,6 +140,21 @@ def init_db():
     conn.commit()
     conn.close()
 
+# ---------------------- 临时重置密码接口（用完删除） ----------------------
+@app.route('/reset_admin_pwd', methods=['GET'])
+def reset_admin_pwd():
+    """临时重置admin密码为admin123，仅用于找回密码，用完删除"""
+    try:
+        # 直接操作数据库，重置admin密码
+        conn = sqlite3.connect('member_system.db')
+        cursor = conn.cursor()
+        cursor.execute('UPDATE admins SET password = ? WHERE username = ?', ('admin123', 'admin'))
+        conn.commit()
+        conn.close()
+        return "✅ 管理员密码已重置为：admin / admin123<br>请删除此路由后重新部署！"
+    except Exception as e:
+        return f"❌ 重置失败：{str(e)}"
+
 # ---------------------- 会员管理相关接口 ----------------------
 @app.route('/member/add', methods=['POST'])
 @login_required
@@ -647,13 +662,3 @@ if __name__ == '__main__':
     init_db()
     # 启动服务（调试模式开启，便于排查错误）
     app.run(debug=True, host='0.0.0.0', port=5000)
-    # 临时重置密码接口（用完删除）
-@app.route('/reset_admin_pwd', methods=['GET'])
-def reset_admin_pwd():
-    import sqlite3
-    conn = sqlite3.connect('member_system.db')
-    cursor = conn.cursor()
-    cursor.execute('UPDATE admins SET password="admin123" WHERE username="admin"')
-    conn.commit()
-    conn.close()
-    return "密码已重置为 admin/admin123，快去登录！"
