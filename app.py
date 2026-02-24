@@ -1,31 +1,45 @@
-# 第一步：先导入所有依赖（必须在最顶部）
+# 第一步：导入所有依赖
 import math
 import sqlite3
 import os
 import datetime
+import sys
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, g, send_file
 import io
-import sys
 
-# 第二步：创建Flask应用实例（必须在路由之前）
+# 第二步：创建Flask应用（必须在路由前）
 app = Flask(__name__)
-app.secret_key = 'member_system_2026_secure_key'
+app.secret_key = 'member_system_2026_secure_key_' + os.urandom(16).hex()
 app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.config['JSON_AS_ASCII'] = False  # 解决中文乱码
 
-# ---------------------- 数据库工具函数 ----------------------
+# ---------------------- 数据库配置（适配Render /tmp目录） ----------------------
+DB_PATH = '/tmp/member_system.db'  # Render唯一可写目录
+
 def db_connect():
+    """数据库连接（强制用/tmp目录）"""
     if 'db' not in g:
-        g.db = sqlite3.connect('member_system.db')
-        g.db.row_factory = sqlite3.Row
-        g.db.execute('PRAGMA foreign_keys = ON')
+        try:
+            g.db = sqlite3.connect(DB_PATH)
+            g.db.row_factory = sqlite3.Row
+            g.db.execute('PRAGMA foreign_keys = ON')
+            g.db.execute('PRAGMA journal_mode = WAL')  # 提升稳定性
+        except Exception as e:
+            print(f"数据库连接失败：{str(e)}", file=sys.stderr)
+            raise
     return g.db
 
 def db_close(e=None):
+    """关闭数据库连接"""
     db = g.pop('db', None)
     if db is not None:
-        db.close()
+        try:
+            db.close()
+        except:
+            pass
 
 def db_query(sql, params=()):
+    """数据库查询"""
     try:
         conn = db_connect()
         cursor = conn.cursor()
@@ -33,10 +47,11 @@ def db_query(sql, params=()):
         result = cursor.fetchall()
         return [dict(row) for row in result]
     except Exception as e:
-        print(f"查询错误：{str(e)}", file=sys.stderr)
+        print(f"查询错误：{str(e)} | SQL: {sql} | 参数: {params}", file=sys.stderr)
         return []
 
 def db_execute(sql, params=()):
+    """数据库执行"""
     try:
         conn = db_connect()
         cursor = conn.cursor()
@@ -44,11 +59,161 @@ def db_execute(sql, params=()):
         conn.commit()
         return cursor.rowcount
     except Exception as e:
-        print(f"执行错误：{str(e)}", file=sys.stderr)
+        print(f"执行错误：{str(e)} | SQL: {sql} | 参数: {params}", file=sys.stderr)
         return 0
 
-# ---------------------- 登录验证装饰器 ----------------------
+# ---------------------- 初始化数据库（启动必执行） ----------------------
+def init_db():
+    """强制初始化所有表"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('PRAGMA foreign_keys = ON')
+
+        # 1. 创建设置表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+                id INTEGER PRIMARY KEY DEFAULT 1,
+                shop_name TEXT DEFAULT '',
+                shop_phone TEXT DEFAULT '',
+                shop_address TEXT DEFAULT '',
+                point_rate INTEGER DEFAULT 1,
+                level_up_points INTEGER DEFAULT 100,
+                level_up_gold_points INTEGER DEFAULT 1000,
+                print_receipt INTEGER DEFAULT 1
+            )
+        ''')
+
+        # 2. 创建操作员表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS admins (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                role TEXT DEFAULT 'operator'
+            )
+        ''')
+
+        # 3. 创建权限表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                perm_name TEXT UNIQUE NOT NULL,
+                perm_desc TEXT DEFAULT ''
+            )
+        ''')
+
+        # 4. 创建操作员权限关联表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS admin_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id INTEGER NOT NULL,
+                perm_id INTEGER NOT NULL,
+                FOREIGN KEY(admin_id) REFERENCES admins(id) ON DELETE CASCADE,
+                FOREIGN KEY(perm_id) REFERENCES permissions(id) ON DELETE CASCADE,
+                UNIQUE(admin_id,perm_id)
+            )
+        ''')
+
+        # 5. 初始化权限数据
+        perms = [
+            ('member_manage','会员管理'),
+            ('recharge_manage','充值管理'),
+            ('consume_manage','消费收银'),
+            ('points_manage','积分管理'),
+            ('report_view','查看报表'),
+            ('report_export','导出Excel'),
+            ('system_setting','系统设置')
+        ]
+        for pn,pd in perms:
+            cursor.execute('INSERT OR IGNORE INTO permissions(perm_name,perm_desc) VALUES(?,?)',(pn,pd))
+
+        # 6. 创建会员表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                card_no TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                phone TEXT UNIQUE NOT NULL,
+                level TEXT DEFAULT '普通会员',
+                balance REAL DEFAULT 0.0,
+                points INTEGER DEFAULT 0,
+                create_time DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 7. 创建消费记录表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS consume_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                member_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                pay_type TEXT NOT NULL,
+                remark TEXT DEFAULT '',
+                points INTEGER DEFAULT 0,
+                create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE
+            )
+        ''')
+
+        # 8. 创建充值记录表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS recharge_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                member_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                pay_type TEXT NOT NULL,
+                remark TEXT DEFAULT '',
+                create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE
+            )
+        ''')
+
+        # 9. 初始化管理员账号（admin/admin123）
+        cursor.execute('SELECT * FROM admins WHERE username=?',('admin',))
+        if not cursor.fetchone():
+            cursor.execute('INSERT INTO admins(username,password,role) VALUES(?,?,?)',
+                        ('admin','admin123','admin'))
+
+        # 10. 给管理员分配所有权限
+        cursor.execute('SELECT id FROM admins WHERE username=?',('admin',))
+        admin_row = cursor.fetchone()
+        if admin_row:
+            aid = admin_row[0]
+            allp = db_query('SELECT id FROM permissions')
+            for p in allp:
+                cursor.execute('INSERT OR IGNORE INTO admin_permissions(admin_id,perm_id) VALUES(?,?)',
+                            (aid,p['id']))
+
+        conn.commit()
+        conn.close()
+        print("✅ 数据库初始化成功", file=sys.stderr)
+    except Exception as e:
+        print(f"❌ 数据库初始化失败：{str(e)}", file=sys.stderr)
+        raise
+
+# 强制重置管理员密码（确保能登录）
+def force_reset_admin_pwd():
+    try:
+        init_db()
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('UPDATE admins SET password=? WHERE username=?',('admin123','admin'))
+        if cursor.rowcount == 0:
+            cursor.execute('INSERT INTO admins(username,password,role) VALUES(?,?,?)',
+                        ('admin','admin123','admin'))
+        conn.commit()
+        conn.close()
+        print("✅ 管理员密码重置成功", file=sys.stderr)
+    except Exception as e:
+        print(f"❌ 重置管理员密码失败：{str(e)}", file=sys.stderr)
+
+# 启动时立即初始化数据库
+force_reset_admin_pwd()
+
+# ---------------------- 装饰器 ----------------------
 def login_required(f):
+    """登录验证"""
     def wrapper(*args, **kwargs):
         if 'username' not in session:
             return redirect(url_for('login'))
@@ -56,8 +221,8 @@ def login_required(f):
     wrapper.__name__ = f.__name__
     return wrapper
 
-# ---------------------- 权限装饰器 ----------------------
 def permission_required(perm_name):
+    """权限验证"""
     def decorator(f):
         def wrapper(*args, **kwargs):
             if 'username' not in session:
@@ -80,153 +245,18 @@ def permission_required(perm_name):
         return wrapper
     return decorator
 
-# ---------------------- 初始化数据库 ----------------------
-def init_db():
-    conn = sqlite3.connect('member_system.db')
-    cursor = conn.cursor()
-    cursor.execute('PRAGMA foreign_keys = ON')
-
-    # 创建设置表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS settings (
-            id INTEGER PRIMARY KEY DEFAULT 1,
-            shop_name TEXT DEFAULT '',
-            shop_phone TEXT DEFAULT '',
-            shop_address TEXT DEFAULT '',
-            point_rate INTEGER DEFAULT 1,
-            level_up_points INTEGER DEFAULT 100,
-            level_up_gold_points INTEGER DEFAULT 1000,
-            print_receipt INTEGER DEFAULT 1
-        )
-    ''')
-
-    # 创建操作员表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS admins (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            role TEXT DEFAULT 'operator'
-        )
-    ''')
-
-    # 创建权限表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS permissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            perm_name TEXT UNIQUE NOT NULL,
-            perm_desc TEXT DEFAULT ''
-        )
-    ''')
-
-    # 创建操作员权限关联表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS admin_permissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            admin_id INTEGER NOT NULL,
-            perm_id INTEGER NOT NULL,
-            FOREIGN KEY(admin_id) REFERENCES admins(id) ON DELETE CASCADE,
-            FOREIGN KEY(perm_id) REFERENCES permissions(id) ON DELETE CASCADE,
-            UNIQUE(admin_id,perm_id)
-        )
-    ''')
-
-    # 初始化权限数据
-    perms = [
-        ('member_manage','会员管理'),
-        ('recharge_manage','充值管理'),
-        ('consume_manage','消费收银'),
-        ('points_manage','积分管理'),
-        ('report_view','查看报表'),
-        ('report_export','导出Excel'),
-        ('system_setting','系统设置')
-    ]
-    for pn,pd in perms:
-        cursor.execute('INSERT OR IGNORE INTO permissions(perm_name,perm_desc) VALUES(?,?)',(pn,pd))
-
-    # 创建会员表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS members (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            card_no TEXT UNIQUE NOT NULL,
-            name TEXT NOT NULL,
-            phone TEXT UNIQUE NOT NULL,
-            level TEXT DEFAULT '普通会员',
-            balance REAL DEFAULT 0.0,
-            points INTEGER DEFAULT 0,
-            create_time DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # 创建消费记录表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS consume_records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            member_id INTEGER NOT NULL,
-            amount REAL NOT NULL,
-            pay_type TEXT NOT NULL,
-            remark TEXT DEFAULT '',
-            points INTEGER DEFAULT 0,
-            create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE
-        )
-    ''')
-
-    # 创建充值记录表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS recharge_records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            member_id INTEGER NOT NULL,
-            amount REAL NOT NULL,
-            pay_type TEXT NOT NULL,
-            remark TEXT DEFAULT '',
-            create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE
-        )
-    ''')
-
-    # 初始化管理员账号
-    cursor.execute('SELECT * FROM admins WHERE username=?',('admin',))
-    if not cursor.fetchone():
-        cursor.execute('INSERT INTO admins(username,password,role) VALUES(?,?,?)',
-                      ('admin','admin123','admin'))
-
-    # 给管理员分配所有权限
-    cursor.execute('SELECT id FROM admins WHERE username=?',('admin',))
-    admin_row = cursor.fetchone()
-    if admin_row:
-        aid = admin_row[0]
-        allp = db_query('SELECT id FROM permissions')
-        for p in allp:
-            cursor.execute('INSERT OR IGNORE INTO admin_permissions(admin_id,perm_id) VALUES(?,?)',
-                          (aid,p['id']))
-
-    conn.commit()
-    conn.close()
-
-def force_reset_admin_pwd():
-    init_db()
-    conn = sqlite3.connect('member_system.db')
-    cursor = conn.cursor()
-    cursor.execute('UPDATE admins SET password=? WHERE username=?',('admin123','admin'))
-    if cursor.rowcount == 0:
-        cursor.execute('INSERT INTO admins(username,password,role) VALUES(?,?,?)',
-                      ('admin','admin123','admin'))
-    conn.commit()
-    conn.close()
-
 # ---------------------- 会员管理（核心修复） ----------------------
 @app.route('/member/add', methods=['POST'])
 @login_required
 @permission_required('member_manage')
 def add_member():
     try:
-        # 1. 严格获取并校验参数
+        # 1. 获取并校验参数
         card_no = request.form.get('card_no','').strip()
         name = request.form.get('name','').strip()
         phone = request.form.get('phone','').strip()
         
-        # 详细校验
+        # 校验逻辑
         error_msg = ""
         if not card_no:
             error_msg = "卡号不能为空！"
@@ -240,8 +270,8 @@ def add_member():
         if error_msg:
             return jsonify({'success':False,'msg':error_msg})
         
-        # 2. 检查唯一性（直接操作数据库）
-        conn = sqlite3.connect('member_system.db')
+        # 2. 检查唯一性
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
         # 检查手机号
@@ -256,7 +286,7 @@ def add_member():
             conn.close()
             return jsonify({'success':False,'msg':'卡号已存在！'})
         
-        # 3. 插入数据（强制提交）
+        # 3. 插入数据
         insert_sql = '''
             INSERT INTO members (card_no, name, phone, level, balance, points, create_time)
             VALUES (?, ?, ?, '普通会员', 0.0, 0, CURRENT_TIMESTAMP)
@@ -266,12 +296,12 @@ def add_member():
         row_count = cursor.rowcount
         conn.close()
         
-        # 4. 验证插入结果
+        # 4. 返回结果
         if row_count == 1:
             print(f"✅ 会员添加成功：{card_no} | {name} | {phone}", file=sys.stderr)
             return jsonify({'success':True,'msg':'会员添加成功！'})
         else:
-            print(f"❌ 会员添加失败：无数据写入，行数={row_count}", file=sys.stderr)
+            print(f"❌ 会员添加失败：行数={row_count}", file=sys.stderr)
             return jsonify({'success':False,'msg':'添加失败：数据库未写入数据！'})
             
     except sqlite3.Error as e:
@@ -286,7 +316,7 @@ def add_member():
 @permission_required('member_manage')
 def delete_member(member_id):
     try:
-        conn = sqlite3.connect('member_system.db')
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute('DELETE FROM members WHERE id=?', (member_id,))
         conn.commit()
@@ -300,28 +330,35 @@ def delete_member(member_id):
 @login_required
 @permission_required('member_manage')
 def member():
-    # 直接查询数据库，确保数据最新
-    conn = sqlite3.connect('member_system.db')
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM members ORDER BY create_time DESC')
-    members = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return render_template('member.html',members=members,session=session)
+    """会员列表页面"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM members ORDER BY create_time DESC')
+        members = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return render_template('member.html',members=members,session=session)
+    except Exception as e:
+        print(f"❌ 加载会员列表失败：{str(e)}", file=sys.stderr)
+        return jsonify({'success':False,'msg':'加载失败：'+str(e)}), 500
 
-# 临时测试接口：查看所有会员
+# ---------------------- 其他核心路由（完整保留） ----------------------
 @app.route('/member/test')
 @login_required
 def test_member_list():
-    conn = sqlite3.connect('member_system.db')
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM members')
-    members = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return jsonify({'total':len(members),'members':members})
+    """测试接口：查看所有会员"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM members')
+        members = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify({'total':len(members),'members':members})
+    except Exception as e:
+        return jsonify({'success':False,'msg':str(e)}), 500
 
-# ---------------------- 充值管理 ----------------------
 @app.route('/recharge')
 @login_required
 @permission_required('recharge_manage')
@@ -357,7 +394,6 @@ def submit_recharge():
     except Exception as e:
         return jsonify({'success':False,'msg':f'失败：{str(e)}'})
 
-# ---------------------- 积分管理 ----------------------
 @app.route('/points')
 @login_required
 @permission_required('points_manage')
@@ -392,7 +428,6 @@ def adjust_points():
     except:
         return jsonify({'success':False,'msg':'失败'})
 
-# ---------------------- 首页/工作台 ----------------------
 @app.route('/')
 @login_required
 def index():
@@ -412,7 +447,6 @@ def index():
         total_recharge=ar[0]['t'] if ar and ar[0]['t'] else 0,
         total_points=ap[0]['t'] if ap and ap[0]['t'] else 0)
 
-# ---------------------- 登录/登出 ----------------------
 @app.route('/login',methods=['GET','POST'])
 def login():
     if request.method=='POST':
@@ -433,7 +467,6 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# ---------------------- 系统设置 ----------------------
 @app.route('/setting')
 @login_required
 @permission_required('system_setting')
@@ -500,7 +533,6 @@ def assign_perm():
             db_execute('INSERT INTO admin_permissions(admin_id,perm_id) VALUES(?,?)',(aid,p[0]['id']))
     return jsonify({'success':True,'msg':'权限保存成功'})
 
-# ---------------------- 消费收银 ----------------------
 @app.route('/consume')
 @login_required
 @permission_required('consume_manage')
@@ -554,7 +586,6 @@ def submit_consume():
     except Exception as e:
         return jsonify({'success':False,'msg':f'失败：{str(e)}'})
 
-# ---------------------- 统计报表 ----------------------
 @app.route('/report')
 @login_required
 @permission_required('report_view')
@@ -591,7 +622,7 @@ def report():
 @permission_required('report_export')
 def export_report():
     try:
-        from openpyxl import Workbook  # 延迟导入，避免Render依赖问题
+        from openpyxl import Workbook
         wb = Workbook()
         ws1 = wb.active
         ws1.title = '会员列表'
@@ -631,12 +662,10 @@ def export_report():
         print(f"❌ 导出Excel错误：{str(e)}", file=sys.stderr)
         return jsonify({'success':False,'msg':f'导出失败：{str(e)}'})
 
-# ---------------------- 启动配置（适配Render） ----------------------
+# ---------------------- 启动配置 ----------------------
 app.teardown_appcontext(db_close)
 
-# Render 部署必须的端口配置
+# Render 部署配置
 if __name__ == '__main__':
-    force_reset_admin_pwd()
-    # 读取Render的端口环境变量，没有则用5000
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)  # 生产环境关闭debug
+    app.run(host='0.0.0.0', port=port, debug=False)
