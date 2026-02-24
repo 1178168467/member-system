@@ -85,6 +85,8 @@
         .btn-primary:hover { background-color: #2980b9; }
         .btn-danger { background-color: #e74c3c; }
         .btn-danger:hover { background-color: #c0392b; }
+        .btn-warning { background-color: #f39c12; } /* 新增：黄色按钮样式，和页面风格统一 */
+        .btn-warning:hover { background-color: #e67e22; }
         .msg {
             margin-top: 15px;
             padding: 10px;
@@ -101,8 +103,13 @@
             color: #a94442;
             display: block;
         }
+        .perm-btn-box { /* 新增：权限按钮容器，调整间距 */
+            margin-top: 30px;
+        }
     </style>
     <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <!-- 可选：引入图标库，让盾牌图标显示正常 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 </head>
 <body>
     <div class="header">
@@ -205,6 +212,14 @@
             <h3>数据备份</h3>
             <button id="backupBtn" class="btn btn-primary">立即备份</button>
             <div id="backupMsg" class="msg"></div>
+        </div>
+
+        <!-- 权限分配入口（调整位置+样式，和页面统一） -->
+        <div class="card perm-btn-box">
+            <h3>操作员权限管理</h3>
+            <a href="/setting/perm_list" class="btn btn-warning">
+                <i class="bi bi-shield-lock"></i> 分配操作员权限
+            </a>
         </div>
     </div>
 
