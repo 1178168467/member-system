@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>会员管理系统 - 消费收银</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .nav {
+            background-color: #34495e;
+            padding: 0 20px;
+        }
+        .nav ul {
+            list-style: none;
+            display: flex;
+        }
+        .nav ul li a {
+            display: block;
+            color: white;
+            text-decoration: none;
+            padding: 15px 20px;
+            transition: background-color 0.3s;
+        }
+        .nav ul li a:hover, .nav ul li a.active {
+            background-color: #1abc9c;
+        }
+        .content {
+            padding: 25px 20px;
+            background-color: #ecf0f1;
+            min-height: calc(100vh - 120px);
+        }
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        .card h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            color: #34495e;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        .btn-primary { background-color: #3498db; }
+        .btn-primary:hover { background-color: #2980b9; }
+        .btn-success { background-color: #27ae60; }
+        .btn-success:hover { background-color: #219653; }
+        .btn:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        .member-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .member-info p {
+            margin-bottom: 8px;
+            color: #2c3e50;
+        }
+        .member-info span {
+            font-weight: 600;
+            color: #e74c3c;
+        }
+        .msg {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .msg-success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            display: block;
+        }
+        .msg-error {
+            background-color: #f2dede;
+            color: #a94442;
+            display: block;
+        }
+        .amount-box {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .amount-box input {
+            flex: 1;
+        }
+        .points-calc {
+            background-color: #e8f4fd;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            display: none;
+        }
+        .points-calc p {
+            color: #2c3e50;
+            font-weight: 600;
+        }
+    </style>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+</head>
+<body>
+    <!-- 头部 -->
+    <div class="header">
+        <div class="title">会员管理系统</div>
+        <div class="user-info">
+            <span>当前登录：{{ session.username }}</span>
+            <a href="/logout" style="color: white; margin-left: 15px; text-decoration: none;">退出登录</a>
+        </div>
+    </div>
+
+    <!-- 导航 -->
+    <div class="nav">
+        <ul>
+            <li><a href="/">工作台</a></li>
+            <li><a href="/member">会员管理</a></li>
+            <li><a href="/consume" class="active">消费收银</a></li>
+            <li><a href="/recharge">充值管理</a></li>
+            <li><a href="/points">积分管理</a></li>
+            <li><a href="/report">统计报表</a></li>
+            <li><a href="/setting">系统设置</a></li>
+        </ul>
+    </div>
+
+    <!-- 内容 -->
+    <div class="content">
+        <div class="card">
+            <h3>消费收银（积分自动计算）</h3>
+            
+            <!-- 会员查询 -->
+            <div class="form-group">
+                <label>查询会员（手机号/卡号）</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="keyword" placeholder="请输入手机号或卡号">
+                    <button class="btn btn-primary" id="searchBtn">查询</button>
+                </div>
+            </div>
+
+            <!-- 会员信息 -->
+            <div class="member-info" id="memberInfo">
+                <p>卡号：<span id="cardNo"></span></p>
+                <p>姓名：<span id="memberName"></span></p>
+                <p>手机号：<span id="phone"></span></p>
+                <p>会员等级：<span id="level"></span></p>
+                <p>当前积分：<span id="points"></span> 分</p>
+            </div>
+
+            <!-- 消费信息 -->
+            <div class="form-group">
+                <label>消费金额</label>
+                <div class="amount-box">
+                    <input type="number" id="amount" step="0.01" min="0.01" placeholder="请输入消费金额">
+                </div>
+                <!-- 积分计算提示容器 -->
+                <div class="points-calc" id="pointsCalc">
+                    <p>本次消费可获得积分：<span id="calcPoints">0</span> 分（积分规则：<span id="pointRate">1</span>元 = 1积分）</p>
+                    <p>消费后总积分：<span id="totalPoints">0</span> 分</p>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>备注</label>
+                <textarea id="remark" rows="3" placeholder="请输入消费备注（选填）"></textarea>
+            </div>
+
+            <input type="hidden" id="memberId">
+            <input type="hidden" id="pointRateVal" value="1"> <!-- 多少元=1积分 -->
+            <button class="btn btn-success" id="submitBtn" disabled>提交消费记录</button>
+            <div id="msg" class="msg"></div>
+        </div>
+    </div>
+
+    <script>
+        // 页面加载完成后初始化
+        $(document).ready(function() {
+            // 初始化变量
+            let currentPointRate = 1; // 默认1元=1积分
+            
+            // 清空提示框
+            $('#msg').removeClass('msg-error msg-success').text('');
+
+            // 1. 页面加载时先获取最新积分规则
+            getPointRate().then(rate => {
+                currentPointRate = rate;
+                $('#pointRateVal').val(rate);
+                $('#pointRate').text(rate); // 更新页面上的积分规则数字
+            });
+
+            // 获取系统设置的积分比例
+            function getPointRate() {
+                return new Promise((resolve) => {
+                    $.get('/setting/get_point_rate', function(res) {
+                        const rate = parseInt(res.point_rate) || 1;
+                        resolve(rate);
+                    }).fail(function() {
+                        resolve(1); // 失败时默认1元=1积分
+                    });
+                });
+            }
+            
+            // 2. 查询会员
+            $('#searchBtn').click(async function() {
+                const keyword = $('#keyword').val().trim();
+                if (!keyword) {
+                    $('#msg').addClass('msg-error').text('请输入手机号或卡号');
+                    return;
+                }
+
+                // 每次查询会员都重新获取最新积分规则
+                currentPointRate = await getPointRate();
+                $('#pointRateVal').val(currentPointRate);
+                $('#pointRate').text(currentPointRate);
+
+                // 发送查询请求
+                $.post('/consume/search', {keyword: keyword}, function(res) {
+                    if (res.success) {
+                        const member = res.member;
+                        // 填充会员信息
+                        $('#memberId').val(member.id);
+                        $('#cardNo').text(member.card_no);
+                        $('#memberName').text(member.name);
+                        $('#phone').text(member.phone);
+                        $('#level').text(member.level);
+                        $('#points').text(member.points);
+                        
+                        // 显示会员信息和启用提交按钮
+                        $('#memberInfo').css('display', 'block');
+                        $('#submitBtn').prop('disabled', false);
+                        $('#msg').removeClass('msg-error msg-success').text('');
+                        
+                        // 初始化积分计算区域
+                        $('#pointsCalc').css('display', 'none');
+                        $('#calcPoints').text(0);
+                        $('#totalPoints').text(member.points);
+                    } else {
+                        $('#memberInfo').css('display', 'none');
+                        $('#pointsCalc').css('display', 'none');
+                        $('#submitBtn').prop('disabled', true);
+                        $('#msg').addClass('msg-error').text(res.msg);
+                    }
+                }).fail(function(xhr) {
+                    $('#msg').addClass('msg-error').text('查询失败：' + xhr.statusText);
+                    $('#memberInfo').css('display', 'none');
+                    $('#pointsCalc').css('display', 'none');
+                    $('#submitBtn').prop('disabled', true);
+                });
+            });
+
+            // 3. 输入消费金额时自动计算积分
+            $('#amount').on('input', function() {
+                const amountStr = $(this).val().trim();
+                const currentPoints = parseInt($('#points').text()) || 0;
+                
+                // 只有会员已查询、金额有效时才计算
+                if (!$('#memberId').val() || !amountStr) {
+                    $('#pointsCalc').css('display', 'none');
+                    return;
+                }
+
+                const amountNum = parseFloat(amountStr);
+                if (isNaN(amountNum) || amountNum <= 0) {
+                    $('#pointsCalc').css('display', 'none');
+                    return;
+                }
+
+                // 按系统设置的比例计算积分（向下取整）
+                const calcPoints = Math.floor(amountNum / currentPointRate);
+                const totalPoints = currentPoints + calcPoints;
+                
+                // 更新并显示计算结果
+                $('#calcPoints').text(calcPoints);
+                $('#totalPoints').text(totalPoints);
+                $('#pointsCalc').css('display', 'block');
+            });
+
+            // 4. 提交消费记录
+            $('#submitBtn').click(async function() {
+                // 1. 先清空之前的提示
+                $('#msg').removeClass('msg-error msg-success').text('');
+                
+                // 2. 获取表单数据并验证
+                const memberId = $('#memberId').val();
+                const amountStr = $('#amount').val().trim();
+                const remark = $('#remark').val().trim();
+
+                // 验证会员ID
+                if (!memberId) {
+                    $('#msg').addClass('msg-error').text('请先查询并选择有效会员');
+                    return;
+                }
+
+                // 验证金额
+                if (!amountStr) {
+                    $('#msg').addClass('msg-error').text('请输入消费金额');
+                    return;
+                }
+                const amountNum = parseFloat(amountStr);
+                if (isNaN(amountNum) || amountNum <= 0) {
+                    $('#msg').addClass('msg-error').text('请输入有效的消费金额（大于0）');
+                    return;
+                }
+
+                // 3. 重新获取最新积分比例
+                currentPointRate = await getPointRate();
+                const calcPoints = Math.floor(amountNum / currentPointRate);
+                const totalPoints = parseInt($('#points').text()) + calcPoints;
+                
+                // 4. 确认提交
+                if (confirm(`确认提交消费记录：
+消费金额：¥${amountNum.toFixed(2)} 元
+积分规则：${currentPointRate}元=1积分
+本次获得积分：${calcPoints} 分
+消费后总积分：${totalPoints} 分`)) {
+                    // 5. 发送提交请求
+                    $.post('/consume/submit', {
+                        member_id: memberId,
+                        amount: amountNum,
+                        pay_type: '无',
+                        remark: remark
+                    }, function(res) {
+                        if (res.success) {
+                            $('#msg').addClass('msg-success').text(res.msg);
+                            // 重置表单
+                            $('#amount').val('');
+                            $('#remark').val('');
+                            $('#pointsCalc').css('display', 'none');
+                            
+                            // 消费成功后重新查询会员，获取最新积分
+                            $.post('/consume/search', {keyword: $('#keyword').val().trim()}, function(res2) {
+                                if (res2.success) {
+                                    $('#points').text(res2.member.points); // 更新为最新积分
+                                    $('#level').text(res2.member.level); // 同步更新会员等级
+                                }
+                            });
+                        } else {
+                            $('#msg').addClass('msg-error').text(res.msg);
+                        }
+                    }).fail(function(xhr) {
+                        $('#msg').addClass('msg-error').text('提交失败：' + xhr.statusText);
+                    });
+                }
+            });
+
+            // 按回车键查询会员
+            $('#keyword').keypress(function(e) {
+                if (e.which === 13) {
+                    $('#searchBtn').click();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
