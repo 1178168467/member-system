@@ -5,7 +5,6 @@ import datetime
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, g, send_file
 import io
 
-# Excel导出需要
 try:
     from openpyxl import Workbook
 except:
@@ -50,15 +49,16 @@ def db_execute(sql, params=()):
         print(f"执行错误：{str(e)}")
         return 0
 
-# ---------------------- 登录验证 ----------------------
+# ---------------------- 登录验证（已修复） ----------------------
 def login_required(f):
     def wrapper(*args, **kwargs):
         if 'username' not in session:
             return redirect(url_for('login'))
-        return f(*args, **wrapper.__name__=f.__name__)
+        return f(*args, **kwargs)
+    wrapper.__name__ = f.__name__
     return wrapper
 
-# ---------------------- 【功能1：权限装饰器】已加好 ----------------------
+# ---------------------- 权限装饰器（已修复） ----------------------
 def permission_required(perm_name):
     def decorator(f):
         def wrapper(*args, **kwargs):
@@ -78,11 +78,11 @@ def permission_required(perm_name):
             if not has:
                 return jsonify({'success':False,'msg':'无此操作权限，请联系管理员'})
             return f(*args,**kwargs)
-        wrapper.__name__=f.__name__
+        wrapper.__name__ = f.__name__
         return wrapper
     return decorator
 
-# ---------------------- 初始化数据库（权限表已加） ----------------------
+# ---------------------- 初始化数据库 ----------------------
 def init_db():
     conn = sqlite3.connect('member_system.db')
     cursor = conn.cursor()
@@ -110,7 +110,6 @@ def init_db():
         )
     ''')
 
-    # ================= 权限表 =================
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS permissions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,7 +129,6 @@ def init_db():
         )
     ''')
 
-    # 默认权限
     perms = [
         ('member_manage','会员管理'),
         ('recharge_manage','充值管理'),
@@ -143,7 +141,6 @@ def init_db():
     for pn,pd in perms:
         cursor.execute('INSERT OR IGNORE INTO permissions(perm_name,perm_desc) VALUES(?,?)',(pn,pd))
 
-    # 会员表
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS members (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -182,13 +179,11 @@ def init_db():
         )
     ''')
 
-    # 默认管理员
     cursor.execute('SELECT * FROM admins WHERE username=?',('admin',))
     if not cursor.fetchone():
         cursor.execute('INSERT INTO admins(username,password,role) VALUES(?,?,?)',
                       ('admin','admin123','admin'))
 
-    # 给admin全部权限
     cursor.execute('SELECT id FROM admins WHERE username=?',('admin',))
     admin_row = cursor.fetchone()
     if admin_row:
@@ -211,7 +206,6 @@ def force_reset_admin_pwd():
                       ('admin','admin123','admin'))
     conn.commit()
     conn.close()
-    print("✅ 初始化完成：admin / admin123")
 
 # ---------------------- 会员 ----------------------
 @app.route('/member/add', methods=['POST'])
@@ -306,7 +300,6 @@ def adjust_points():
         if not mid:
             return jsonify({'success':False,'msg':'请选择会员'})
         db_execute('UPDATE members SET points=points+? WHERE id=?',(p,mid))
-        # 同步等级
         s = db_query('SELECT level_up_points,level_up_gold_points FROM settings WHERE id=1')
         lu = s[0]['level_up_points'] if s else 100
         lug = s[0]['level_up_gold_points'] if s else 1000
@@ -401,7 +394,6 @@ def get_point_rate():
     s = db_query('SELECT point_rate FROM settings WHERE id=1')
     return jsonify({'point_rate': s[0]['point_rate'] if s else 1})
 
-# ---------------------- 【权限分配页面】已做好 ----------------------
 @app.route('/setting/perm_list')
 @login_required
 def perm_list():
@@ -432,7 +424,7 @@ def assign_perm():
             db_execute('INSERT INTO admin_permissions(admin_id,perm_id) VALUES(?,?)',(aid,p[0]['id']))
     return jsonify({'success':True,'msg':'权限保存成功'})
 
-# ---------------------- 消费（【功能2：积分已同步设置】） ----------------------
+# ---------------------- 消费 ----------------------
 @app.route('/consume')
 @login_required
 @permission_required('consume_manage')
@@ -461,7 +453,6 @@ def submit_consume():
         if not mid or amt<=0:
             return jsonify({'success':False,'msg':'金额>0'})
 
-        # 【实时读取设置，积分同步】
         s = db_query('SELECT point_rate,level_up_points,level_up_gold_points FROM settings WHERE id=1')
         pr = s[0]['point_rate'] if (s and s[0]['point_rate']) else 1
         lu = s[0]['level_up_points'] if (s and s[0]['level_up_points']) else 100
@@ -519,7 +510,6 @@ def report():
         level_gold=lg[0]['c'] if lg else 0,
         session=session)
 
-# ---------------------- 【功能3：导出Excel】已做好 ----------------------
 @app.route('/report/export')
 @login_required
 @permission_required('report_export')
@@ -568,4 +558,4 @@ app.teardown_appcontext(db_close)
 
 if __name__ == '__main__':
     force_reset_admin_pwd()
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
