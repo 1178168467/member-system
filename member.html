@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>会员管理系统 - 会员管理</title>
+    <style>
+        /* 保留你原有样式，新增以下样式 */
+        .form-group { margin-bottom: 15px; }
+        .form-control { width: 300px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .btn { padding: 8px 20px; border: none; border-radius: 4px; color: white; cursor: pointer; }
+        .btn-primary { background-color: #3498db; }
+        .msg { margin-top: 10px; padding: 10px; border-radius: 4px; display: none; }
+        .success { background-color: #dff0d8; color: #3c763d; display: block; }
+        .error { background-color: #f2dede; color: #a94442; display: block; }
+    </style>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+</head>
+<body>
+    <!-- 保留你原有头部/导航 -->
+    <div class="header">
+        <div class="title">会员管理系统</div>
+        <div class="user-info">
+            <span>当前登录：{{ session.username }}</span>
+            <a href="/logout" style="color: white; margin-left: 15px; text-decoration: none;">退出登录</a>
+        </div>
+    </div>
+    <div class="nav">
+        <ul>
+            <li><a href="/">工作台</a></li>
+            <li><a href="/member" class="active">会员管理</a></li>
+            <li><a href="/consume">消费收银</a></li>
+            <li><a href="/recharge">充值管理</a></li>
+            <li><a href="/points">积分管理</a></li>
+            <li><a href="/report">统计报表</a></li>
+            <li><a href="/setting">系统设置</a></li>
+        </ul>
+    </div>
+
+    <div class="content" style="padding: 20px;">
+        <!-- 新增会员表单 -->
+        <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3>新增会员</h3>
+            <form id="addMemberForm">
+                <div class="form-group">
+                    <label>会员卡号：</label>
+                    <input type="text" name="card_no" class="form-control" placeholder="请输入卡号" required>
+                </div>
+                <div class="form-group">
+                    <label>会员姓名：</label>
+                    <input type="text" name="name" class="form-control" placeholder="请输入姓名" required>
+                </div>
+                <div class="form-group">
+                    <label>手机号码：</label>
+                    <input type="tel" name="phone" class="form-control" placeholder="请输入11位手机号" pattern="\d{11}" required>
+                </div>
+                <button type="submit" class="btn btn-primary">添加会员</button>
+                <div id="msg" class="msg"></div>
+            </form>
+        </div>
+
+        <!-- 会员列表 -->
+        <div style="background: white; padding: 20px; border-radius: 8px;">
+            <h3>会员列表</h3>
+            <table border="1" cellpadding="8" cellspacing="0" style="width: 100%; border-collapse: collapse;">
+                <tr style="background: #f5f5f5;">
+                    <th>卡号</th>
+                    <th>姓名</th>
+                    <th>手机号</th>
+                    <th>等级</th>
+                    <th>余额</th>
+                    <th>积分</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                </tr>
+                {% for member in members %}
+                <tr>
+                    <td>{{ member.card_no }}</td>
+                    <td>{{ member.name }}</td>
+                    <td>{{ member.phone }}</td>
+                    <td>{{ member.level }}</td>
+                    <td>{{ member.balance }}</td>
+                    <td>{{ member.points }}</td>
+                    <td>{{ member.create_time }}</td>
+                    <td>
+                        <button class="btn btn-danger" onclick="deleteMember({{ member.id }})">删除</button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" style="text-align: center;">暂无会员数据</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // 添加会员
+        $('#addMemberForm').submit(function(e) {
+            e.preventDefault();
+            const formData = $(this).serialize();
+            $('#msg').removeClass('success error').hide();
+            
+            $.post('/member/add', formData, function(res) {
+                if (res.success) {
+                    $('#msg').addClass('success').text(res.msg).show();
+                    $('#addMemberForm')[0].reset();
+                    // 添加成功后刷新页面，显示最新数据
+                    setTimeout(() => { window.location.reload(); }, 1000);
+                } else {
+                    $('#msg').addClass('error').text(res.msg).show();
+                }
+            }).fail(function(xhr) {
+                $('#msg').addClass('error').text('请求失败：' + xhr.statusText).show();
+            });
+        });
+
+        // 删除会员
+        function deleteMember(id) {
+            if (!confirm('确定要删除该会员吗？')) return;
+            $.post(`/member/delete/${id}`, function(res) {
+                if (res.success) {
+                    alert(res.msg);
+                    window.location.reload();
+                } else {
+                    alert(res.msg);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
